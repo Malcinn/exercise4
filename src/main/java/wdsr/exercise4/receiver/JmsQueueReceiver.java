@@ -1,9 +1,20 @@
 package wdsr.exercise4.receiver;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 
+import javax.jms.Connection;
+import javax.jms.Destination;
+import javax.jms.JMSConsumer;
+import javax.jms.JMSException;
+import javax.jms.Message;
+import javax.jms.MessageConsumer;
+import javax.jms.MessageListener;
+import javax.jms.Session;
+
+import org.apache.activemq.ActiveMQConnectionFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import wdsr.exercise4.sender.JmsSender;
 
 /**
  * TODO Complete this class so that it consumes messages from the given queue and invokes the registered callback when an alert is received.
@@ -11,14 +22,53 @@ import wdsr.exercise4.sender.JmsSender;
  * Assume the ActiveMQ broker is running on tcp://localhost:62616
  */
 public class JmsQueueReceiver {
+	
 	private static final Logger log = LoggerFactory.getLogger(JmsQueueReceiver.class);
+	
+	private final ActiveMQConnectionFactory connectionFactory = new ActiveMQConnectionFactory("tcp://localhost:62616");
+	
+	private Connection connection = null;
+	
+	private Session session = null;
+	
+	private Destination destination = null;
+	
+	private MessageConsumer messageConsumer = null;
 	
 	/**
 	 * Creates this object
 	 * @param queueName Name of the queue to consume messages from.
 	 */
+	
 	public JmsQueueReceiver(final String queueName) {
-		// TODO
+		try {
+			/* I have no idea which classes add to trustedPackages, so I allowed all of them ;/
+			String[] arrayOfTrustedPackages = {"wdsr.exercise4","java.math.BigDecimal", "wdsr.exercise4.receiver"};
+			this.connectionFactory.setTrustedPackages(new ArrayList<String>(Arrays.asList(arrayOfTrustedPackages)));
+			*/
+			this.connectionFactory.setTrustAllPackages(true);
+			this.connection = connectionFactory.createConnection();
+			this.session = this.connection.createSession(false, Session.AUTO_ACKNOWLEDGE);
+			this.destination = this.session.createQueue(queueName);
+			this.messageConsumer = this.session.createConsumer(destination, "JMSType = 'PriceAlert' OR JMSType = 'VolumeAlert'");
+			this.startUp();
+		} catch (JMSException ex) {
+			log.error("Caught : "+ ex);
+			ex.printStackTrace();
+		}
+	}
+	
+	private void startUp() throws JMSException{
+		if (this.connection != null && this.session != null)
+			this.connection.start();
+	}
+	
+	private void close() throws JMSException{
+		if (this.connection != null && this.session != null){
+			this.messageConsumer.close();
+			this.session.close();
+			this.connection.close();
+		}
 	}
 
 	/**
@@ -27,13 +77,25 @@ public class JmsQueueReceiver {
 	 */
 	public void registerCallback(AlertService alertService) {
 		// TODO
+		try {
+			MessageListener messageListener = new MyMessageListener(alertService);
+			this.messageConsumer.setMessageListener(messageListener);
+		} catch (JMSException ex) {
+			log.error("Caught : "+ ex);
+			ex.printStackTrace();
+		}
 	}
 	
 	/**
 	 * Deregisters all consumers and closes the connection to JMS broker.
 	 */
 	public void shutdown() {
-		// TODO
+		try {
+			this.close();
+		} catch (JMSException ex) {
+			log.error("Caught : "+ ex);
+			ex.printStackTrace();
+		}
 	}
 
 	// TODO
